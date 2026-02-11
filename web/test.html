@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technical Assessment - Jobs.AI</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f3f4f6;
+            color: #1f2937;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #4f46e5;
+            margin-bottom: 0.5rem;
+        }
+
+        .candidate-info {
+            margin-bottom: 2rem;
+            color: #6b7280;
+        }
+
+        .question-card {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .question-text {
+            font-weight: 600;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .option-label {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .option-label:hover {
+            background: #f9fafb;
+        }
+
+        input[type="radio"] {
+            margin-right: 0.75rem;
+        }
+
+        input[type="radio"]:checked+span {
+            color: #4f46e5;
+            font-weight: 600;
+        }
+
+        button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 2rem;
+        }
+
+        button:hover {
+            background: #4338ca;
+        }
+
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .result-box {
+            text-align: center;
+            padding: 3rem;
+        }
+
+        .score-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: #e0e7ff;
+            color: #4f46e5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0 auto 1.5rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #6b7280;
+        }
+
+        .error {
+            color: #ef4444;
+            text-align: center;
+            padding: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container" id="app">
+        <div class="loading">Loading assessment...</div>
+    </div>
+
+    <script>
+        const API_URL = "/api";
+        const urlParams = new URLSearchParams(window.location.search);
+        const candidateId = urlParams.get('id');
+
+        let questions = [];
+        let answers = {};
+        let violationCount = 0;
+        const MAX_VIOLATIONS = 3;
+
+        async function init() {
+            const app = document.getElementById('app');
+
+            if (!candidateId) {
+                app.innerHTML = '<div class="error">Invalid Link. Candidate ID missing.</div>';
+                return;
+            }
+
+            // Show Start Screen first to enforce rules
+            app.innerHTML = `
+            <div class="result-box" style="text-align:left;">
+                <h1 style="text-align:center;">Technical Assessment</h1>
+                <p>Welcome. This is a timed technical assessment.</p>
+                <div style="background:#fff1f2; border:1px solid #fecdd3; padding:1rem; border-radius:8px; margin:1rem 0;">
+                    <h3 style="color:#be123c; margin-top:0;">⚠️ Anti-Cheating Rules</h3>
+                    <ul style="color:#9f1239;">
+                        <li>You must stay on this tab for the duration of the test.</li>
+                        <li>Switching tabs or minimizing the window is recorded as a violation.</li>
+                        <li>Copying text or using right-click is disabled.</li>
+                        <li><strong>${MAX_VIOLATIONS} violations will result in automatic disqualification.</strong></li>
+                    </ul>
+                </div>
+                <button id="startBtn">I Agree & Start Test</button>
+            </div>
+        `;
+
+            document.getElementById('startBtn').addEventListener('click', async () => {
+                // Request Fullscreen
+                try {
+                    if (document.documentElement.requestFullscreen) {
+                        await document.documentElement.requestFullscreen();
+                    }
+                } catch (e) { console.log("Fullscreen denied"); }
+
+                loadTest();
+            });
+        }
+
+        async function loadTest() {
+            const app = document.getElementById('app');
+            app.innerHTML = '<div class="loading">Loading assessment...</div>';
+
+            // Anti-Cheating Listeners
+            enableAntiCheating();
+
+            try {
+                const res = await fetch(`${API_URL}/test/${candidateId}`);
+                const data = await res.json();
+
+                if (!res.ok) {
+                    if (data.status === 'completed') {
+                        showAlreadyCompleted();
+                        return;
+                    }
+                    throw new Error(data.detail || "Failed to load test");
+                }
+
+                questions = data.questions;
+                renderTest(data.candidate_name);
+
+            } catch (err) {
+                app.innerHTML = `<div class="error">${err.message}</div>`;
+            }
+        }
+
+        function enableAntiCheating() {
+            // 1. Tab Switching
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    recordViolation("Tab switching detected.");
+                }
+            });
+
+            // 2. Blur (Clicking outside)
+            window.addEventListener('blur', () => {
+                // Sometimes triggers on file dialogs or system popups, be careful. 
+                // But for strictly controlled test, it's okay to warn.
+                if (document.activeElement.tagName === 'IFRAME') return; // Ignore iframes
+                recordViolation("Focus lost (clicked outside or switched app).");
+            });
+
+            // 3. Disable Context Menu
+            document.addEventListener('contextmenu', event => event.preventDefault());
+
+            // 4. Disable Copy/Paste
+            document.addEventListener('copy', e => e.preventDefault());
+            document.addEventListener('cut', e => e.preventDefault());
+            document.addEventListener('paste', e => e.preventDefault());
+        }
+
+        function recordViolation(reason) {
+            violationCount++;
+            const remaining = MAX_VIOLATIONS - violationCount;
+
+            if (remaining >= 0) {
+                alert(`⚠️ VIOLATION DETECTED: ${reason}\n\nYou have ${remaining} warnings left before automatic submission.`);
+            }
+
+            if (violationCount >= MAX_VIOLATIONS) {
+                alert("⛔ Maximum violations reached. The test will now strict-submit.");
+                document.getElementById('testForm')?.dispatchEvent(new Event('submit'));
+            }
+        }
+
+        function renderTest(name) {
+            const app = document.getElementById('app');
+
+            if (!Array.isArray(questions) || questions.length === 0) {
+                app.innerHTML = '<div class="error">No questions available. Please contact support.</div>';
+                return;
+            }
+
+            let html = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <h1>Technical Assessment</h1>
+                <div style="background:#fee2e2; color:#b91c1c; padding:0.25rem 0.75rem; border-radius:99px; font-weight:bold; font-size:0.9rem;" id="warningBadge">
+                    Warnings: 0/${MAX_VIOLATIONS}
+                </div>
+            </div>
+            <div class="candidate-info">Candidate: <strong>${name}</strong></div>
+            <form id="testForm">
+        `;
+
+            questions.forEach((q, idx) => {
+                if (!q || !Array.isArray(q.options)) {
+                    console.error("Invalid question data:", q);
+                    return;
+                }
+
+                html += `
+                <div class="question-card">
+                    <div class="question-text">${idx + 1}. ${q.question || 'Question missing'}</div>
+                    <div class="options">
+                        ${q.options.map((opt, optIdx) => `
+                            <label class="option-label">
+                                <input type="radio" name="q_${q.id}" value="${optIdx}" required>
+                                <span>${opt}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            });
+
+            html += `<button type="submit" id="submitBtn">Submit Assessment</button></form>`;
+            app.innerHTML = html;
+
+            const form = document.getElementById('testForm');
+            if (form) form.addEventListener('submit', handleSubmit);
+        }
+
+        async function handleSubmit(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = "Submitting...";
+            }
+
+            const formData = new FormData(e.target);
+            const submitData = {};
+
+            questions.forEach(q => {
+                const val = formData.get(`q_${q.id}`);
+                if (val !== null) {
+                    submitData[q.id] = parseInt(val);
+                }
+            });
+
+            try {
+                const res = await fetch(`${API_URL}/test/${candidateId}/submit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ answers: submitData })
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    showResult(result.score_percent);
+                } else {
+                    alert("Submission failed: " + result.detail);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerText = "Submit Assessment";
+                    }
+                }
+
+            } catch (err) {
+                console.error(err);
+                alert("Error submitting test.");
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerText = "Submit Assessment";
+                }
+            }
+        }
+
+        function showResult(score) {
+            const app = document.getElementById('app');
+            app.innerHTML = `
+            <div class="result-box">
+                <div class="score-circle">${Math.round(score)}%</div>
+                <h2>Assessment Completed</h2>
+                <p>Thank you for completing the technical assessment.</p>
+                <p>Our team has been notified of your results.</p>
+            </div>
+        `;
+            // Exit Fullscreen
+            if (document.exitFullscreen) document.exitFullscreen().catch(() => { });
+        }
+
+        function showAlreadyCompleted() {
+            const app = document.getElementById('app');
+            app.innerHTML = `
+            <div class="result-box">
+                <h2>Assessment Already Completed</h2>
+                <p>You have already submitted this assessment.</p>
+            </div>
+        `;
+        }
+
+        init();
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jobs.AI Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="sidebar">
+        <div class="brand">
+            <img src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" alt="Logo">
+            <h2>Jobs.AI</h2>
+        </div>
+        <ul class="nav">
+            <li class="active" onclick="switchTab('dashboard')">Dashboard</li>
+            <li onclick="switchTab('upload')">New Assessment</li>
+            <li onclick="switchTab('candidates')">Candidates</li>
+            <li onclick="switchTab('settings')">Settings</li>
+        </ul>
+        <div class="footer">
+            <p>v3.0 Professional</p>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- Header -->
+        <header>
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="Search candidates...">
+            </div>
+            <div class="user-profile">
+                <span>HR Manager</span>
+                <div class="avatar">JM</div>
+            </div>
+        </header>
+
+        <!-- Dashboard View -->
+        <div id="dashboard" class="view active">
+            <h1>Analytics Dashboard</h1>
+            <div class="metric-cards">
+                <div class="card">
+                    <h3>Total Candidates</h3>
+                    <p id="totalCandidates">0</p>
+                </div>
+                <div class="card">
+                    <h3>Average Score</h3>
+                    <p id="avgScore">0%</p>
+                </div>
+                <div class="card">
+                    <h3>Shortlisted</h3>
+                    <p id="shortlistedCount">0</p>
+                </div>
+                <div class="card">
+                    <h3>Emails Sent</h3>
+                    <p id="emailsSent">0</p>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="scoreChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Upload View -->
+        <div id="upload" class="view">
+            <h1>New Assessment</h1>
+            <div class="form-container">
+                <div class="form-group">
+                    <label>Job Title</label>
+                    <input type="text" id="jobTitle" value="Senior Python Developer">
+                </div>
+                <div class="form-group">
+                    <label>Job Description</label>
+                    <textarea id="jobDesc" rows="6" placeholder="Paste job description here..."></textarea>
+                </div>
+
+                <div class="upload-area" id="dropZone">
+                    <p>Drag & Drop Resumes Here</p>
+                    <input type="file" id="fileInput" multiple hidden>
+                    <button onclick="document.getElementById('fileInput').click()">Browse Files</button>
+                </div>
+                <div id="fileList"></div>
+
+                <div class="settings-row">
+                    <div class="form-group">
+                        <label>Top Candidates to Shortlist</label>
+                        <input type="number" id="topN" value="10" min="1">
+                    </div>
+                    <div class="form-group checkbox">
+                        <label><input type="checkbox" id="autoEmail" checked> Auto-send Emails</label>
+                    </div>
+                </div>
+
+                <button class="btn-primary" onclick="startAnalysis()">🚀 Start Analysis</button>
+            </div>
+        </div>
+
+        <!-- Candidates View -->
+        <div id="candidates" class="view">
+            <h1>Candidates Pipeline</h1>
+
+            <div class="control-bar"
+                style="background: white; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <div>
+                    <label style="font-weight: 600; font-size: 0.9rem;">Batch Scheduling:</label>
+                    <input type="datetime-local" id="interviewTime"
+                        style="padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+                </div>
+                <button class="btn-secondary" onclick="scheduleSelected()"
+                    style="padding: 0.5rem 1rem; background: #e0e7ff; color: #4338ca; border: none; border-radius: 4px; cursor: pointer;">📅
+                    Set Time for Selected</button>
+                <div style="width: 1px; height: 24px; background: #e5e7eb; margin: 0 0.5rem;"></div>
+                <button class="btn-primary" onclick="sendInvites()"
+                    style="padding: 0.5rem 1rem; background: #4f46e5; color: white; border: none; border-radius: 4px; cursor: pointer;">📧
+                    Send Invites</button>
+            </div>
+
+            <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" id="filterCheckbox" checked onchange="toggleFilter()">
+                <label for="filterCheckbox" style="font-weight: 500; color: #4b5563; cursor: pointer;">Show Shortlisted
+                    Only</label>
+                <span style="margin-left: auto; color: #6b7280; font-size: 0.9rem;">Select candidates within the table
+                    to perform batch actions.</span>
+            </div>
+
+            <!-- Interactive Data Table -->
+            <div class="table-container">
+                <table id="candidateTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                            </th>
+                            <th>Name / Role</th>
+                            <th>Status (Email/Test)</th>
+                            <th>ATS Score</th>
+                            <th>MCQ Score</th>
+                            <th>HR Score</th>
+                            <th>Final Score</th>
+                            <th>Interview Time</th>
+                            <th style="text-align: center;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="candidateBody">
+                        <!-- Dynamic Content -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+
+</html>
